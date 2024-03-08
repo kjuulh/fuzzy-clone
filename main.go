@@ -10,7 +10,7 @@ func main() {
 	cmd := cobra.Command{
 		Use: "fuzzy-clone",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			log.Println("Hello, fuzzy-clone")
+			log.Println("Hello, fuzzy-clone something")
 
 			return nil
 		},
