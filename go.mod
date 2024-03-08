@@ -1,4 +1,4 @@
-module shuttle-extensions-template
+module fuzzy-clone
 
 go 1.21.6
 
