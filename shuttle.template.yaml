@@ -1,0 +1,8 @@
+name: shuttle-extensions-template
+description: Enhances your experience with shuttle.
+provider: 
+  github-release:
+    owner: kjuulh
+    repo: shuttle-extensions-template
+registry:
+  github: kjuulh/shuttle-extensions

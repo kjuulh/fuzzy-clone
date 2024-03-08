@@ -1,0 +1,34 @@
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
+change-title-escapes: '\<*_&'
+version-resolver:
+  major:
+    labels:
+      - "major"
+  minor:
+    labels:
+      - "minor"
+  patch:
+    labels:
+      - "patch"
+  default: patch
+autolabeler:
+  - label: "minor"
+    branch:
+      - '/feature\/.+/'
+      - '/feat\/.+/'
+  - label: "patch"
+    branch:
+      - '/bug\/.+/'
+      - '/docs\/.+/'
+      - '/fix\/.+/'
+      - '/patch\/.+/'
+      - '/chore\/.+/'
+
+exclude-labels:
+  - "skip-changelog"
+
+template: |
+  ## Changes
+
+  $CHANGES

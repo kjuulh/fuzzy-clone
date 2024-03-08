@@ -1,0 +1,27 @@
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+      - "386"
+
+archives:
+  - id: archives
+    format: binary
+    name_template: "{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}"
+
+checksum:
+  name_template: "{{ .ProjectName }}-checksums.txt"
+
+snapshot:
+  name_template: "git-{{.Commit}}"
+
+release:
+  name_template: "v{{.Version}}"
+
+changelog:
+  skip: true
