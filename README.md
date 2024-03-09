@@ -29,6 +29,15 @@ GITHUB_ACCESS_TOKEN=#<github token>
 fuzzy-clone
 
 # Update cache (that way fuzzy-clone will be next to instant. 
-# Run this regularly, we recommend using one of the scripts in shell/zsh/script)
 fuzzy-clone cache update
 ```
+
+## Script
+
+To make automatic hopping possible you need to use one of the shell variants, see `shell/zsh/fuzzy-clone.zsh`.
+
+Simply create an alias in your plugin or .zshrc
+
+Remember fuzzy-clone.zsh has to be moved to your path to be useful
+
+`alias fc="source fuzzy-clone.zsh"`
