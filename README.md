@@ -39,10 +39,12 @@ fz
 ## Usage
 
 ```
-# Pick a repo
+fz
+
+# For the fully qualified binaries without shell niceties
 fuzzy-clone
 
-# Update cache (that way fuzzy-clone will be next to instant. 
+# Update cache manually (done automatically in fz)
 fuzzy-clone cache update
 ```
 
