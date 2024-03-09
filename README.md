@@ -1,17 +1,30 @@
 # fuzzy-clone
 
-![fuzzy-clone](assets/fuzzy-clone.gif)
+![fuzzy-clone demo](assets/fuzzy-clone.gif)
 
 Fuzzy clone is a repository picker and downloader. It exists for one purpose, so that you don't have to fiddle around in a git ui (github, gitea, etc.), find a download link, cd on your local pc, git clone, cd again and so on.
 
 Fuzzy clone simply presents a list of your subscribed orgs, and you fuzzy search, hit enter and you're placed in the repo, simply as that.
+
+## Install
+
+### Golang
+
+```
+go install github.com/kjuulh/fuzzy-clone@latest
+```
+
+### Homebrew
+
+```
+brew install kjuulh/brew/fuzzy-clone  
+```
 
 ## Setup
 
 Fuzzy clone either uses 
 
 ```bash
-go install github.com/kjuulh/fuzzy-clone@latest
 
 # Home
 FUZZY_CLONE_ROOT=$HOME/git # default
