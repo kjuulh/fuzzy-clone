@@ -28,6 +28,7 @@ GITHUB_ACCESS_TOKEN=#<github token>
 # Pick a repo
 fuzzy-clone
 
-# Update cache (that way fuzzy-clone will be next to instant, run this regularly, we recommend using one of the scripts in shell/zsh/script)
+# Update cache (that way fuzzy-clone will be next to instant. 
+# Run this regularly, we recommend using one of the scripts in shell/zsh/script)
 fuzzy-clone cache update
 ```
