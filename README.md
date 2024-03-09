@@ -11,21 +11,15 @@ Fuzzy clone either uses
 ```bash
 go install github.com/kjuulh/fuzzy-clone@latest
 
-# Subscriptions
-FUZZY_CLONE_GITHUB=true #default
-FUZZY_CLONE_GITEA_ORGS=git.front.kjuulh.io/kjuulh
-
 # Home
 FUZZY_CLONE_ROOT=$HOME/git # default
 # Will produce a structure like so once a repo is cloned
 # $HOME/git/github.com/kjuulh/fuzzy-clone
 
 # Authentication
-
 FUZZY_CLONE_GITHUB_TOKEN=#<github token>
 # Or fallbacks on
-GITHUB_TOKEN=#<github token>
-GITEA_TOKEN=#<gitea token>
+GITHUB_ACCESS_TOKEN=#<github token>
 ```
 
 ## Usage

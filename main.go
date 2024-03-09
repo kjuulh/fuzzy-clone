@@ -222,7 +222,6 @@ func NewGitHubProvider() *GitHubProvider {
 }
 
 func getOrgRepos(ctx context.Context, client *github.Client, page int) ([]*github.Repository, error) {
-	log.Printf("sending request for page: %d", page)
 	repos, resp, err := client.Repositories.ListByAuthenticatedUser(ctx, &github.RepositoryListByAuthenticatedUserOptions{
 		Visibility:  "all",
 		Sort:        "updated",
@@ -246,7 +245,6 @@ func getOrgRepos(ctx context.Context, client *github.Client, page int) ([]*githu
 }
 
 func getUserRepos(ctx context.Context, client *github.Client, page int) ([]*github.Repository, error) {
-	log.Printf("sending request for page: %d", page)
 	repos, resp, err := client.Repositories.ListByAuthenticatedUser(ctx, &github.RepositoryListByAuthenticatedUserOptions{
 		Visibility:  "all",
 		Sort:        "updated",
@@ -269,13 +267,31 @@ func getUserRepos(ctx context.Context, client *github.Client, page int) ([]*gith
 	return append(repos, moreRepos...), nil
 }
 
-func (g *GitHubProvider) Get(ctx context.Context) ([]*GitHubRepository, error) {
+func getGitHubToken() string {
+	token := os.Getenv("FUZZY_CLONE_GITHUB_TOKEN")
+	if token != "" {
+		return token
+	}
 
-	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: os.Getenv("GITHUB_ACCESS_TOKEN")})
+	return os.Getenv("GITHUB_ACCESS_TOKEN")
+}
+
+func getHomeOrDefault() string {
+	home := os.Getenv("FUZZY_CLONE_ROOT")
+	if home != "" {
+		return home
+	}
+
+	return os.ExpandEnv("$HOME/git")
+}
+
+func (g *GitHubProvider) Get(ctx context.Context) ([]*GitHubRepository, error) {
+	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: getGitHubToken()})
 	httpClient := oauth2.NewClient(ctx, ts)
 
 	client := github.NewClient(httpClient)
 
+	log.Println("fetching github repos, this may take a bit...")
 	repos, err := getOrgRepos(ctx, client, 0)
 	if err != nil {
 		return nil, err
