@@ -274,7 +274,16 @@ func getGitHubToken() string {
 		return token
 	}
 
-	return os.Getenv("GITHUB_ACCESS_TOKEN")
+	token = os.Getenv("GITHUB_ACCESS_TOKEN")
+	if token != "" {
+		return token
+	}
+
+	if output, err := exec.Command("gh", "auth", "token").Output(); err != nil {
+		return string(output)
+	}
+
+	return ""
 }
 
 func getHomeOrDefault() string {
