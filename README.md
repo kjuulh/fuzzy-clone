@@ -1,6 +1,8 @@
-# fuzzy-clone
+# fuzzy-clone (fz)
 
 ![fuzzy-clone demo](assets/fuzzy-clone.gif)
+
+> <small><strong>,</strong> is my alias for <strong>fz</strong></small>
 
 Fuzzy clone is a repository picker and downloader. It exists for one purpose, so that you don't have to fiddle around in a git ui (github, gitea, etc.), find a download link, cd on your local pc, git clone, cd again and so on.
 
