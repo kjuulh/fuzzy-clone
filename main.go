@@ -296,7 +296,13 @@ func getHomeOrDefault() string {
 }
 
 func (g *GitHubProvider) Get(ctx context.Context) ([]*GitHubRepository, error) {
-	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: getGitHubToken()})
+
+	token := getGitHubToken()
+	if token == "" {
+		return nil, fmt.Errorf("a token is required for github, follow setup in readme, and remember that the token should have at least repo:read, or consider installing the github-cli (gh) utility")
+	}
+
+	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
 	httpClient := oauth2.NewClient(ctx, ts)
 
 	client := github.NewClient(httpClient)
