@@ -62,3 +62,5 @@ FUZZY_CLONE_GITHUB_TOKEN=#<github token>
 # Or fallbacks on
 GITHUB_ACCESS_TOKEN=#<github token>
 ```
+
+> Your GITHUB_TOKEN should have repo:read at least. Consider adding org:read as well if you need access to org repos
