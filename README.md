@@ -10,18 +10,37 @@ Fuzzy clone simply presents a list of your subscribed orgs, and you fuzzy search
 
 ### Golang
 
-```
+```bash
 go install github.com/kjuulh/fuzzy-clone@latest
 ```
 
 ### Homebrew
 
-```
+```bash
 brew install kjuulh/brew/fuzzy-clone  
 ```
 
 ## Setup
 
+Setup the utility scripts
+
+### Zsh
+
+```bash
+echo 'eval "$(fuzzy-clone init zsh)" >> ~/.zshrc' 
+```
+
+## Usage
+
+```
+# Pick a repo
+fuzzy-clone
+
+# Update cache (that way fuzzy-clone will be next to instant. 
+fuzzy-clone cache update
+```
+
+## Configuration
 Fuzzy clone either uses 
 
 ```bash
@@ -36,23 +55,3 @@ FUZZY_CLONE_GITHUB_TOKEN=#<github token>
 # Or fallbacks on
 GITHUB_ACCESS_TOKEN=#<github token>
 ```
-
-## Usage
-
-```
-# Pick a repo
-fuzzy-clone
-
-# Update cache (that way fuzzy-clone will be next to instant. 
-fuzzy-clone cache update
-```
-
-## Script
-
-To make automatic hopping possible you need to use one of the shell variants, see `shell/zsh/fuzzy-clone.zsh`.
-
-Simply create an alias in your plugin or .zshrc
-
-Remember fuzzy-clone.zsh has to be moved to your path to be useful
-
-`alias fc="source fuzzy-clone.zsh"`
