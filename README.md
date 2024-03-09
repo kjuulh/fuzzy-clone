@@ -1,5 +1,7 @@
 # fuzzy-clone
 
+![fuzzy-clone demo](assets/fuzzy-clone.gif)
+
 Fuzzy clone is a repository picker and downloader. It exists for one purpose, so that you don't have to fiddle around in a git ui (github, gitea, etc.), find a download link, cd on your local pc, git clone, cd again and so on.
 
 Fuzzy clone simply presents a list of your subscribed orgs, and you fuzzy search, hit enter and you're placed in the repo, simply as that.
