@@ -64,3 +64,7 @@ GITHUB_ACCESS_TOKEN=#<github token>
 ```
 
 > Your *github token* should have repo:read at least. Consider adding org:read as well if you need access to org repos
+
+# Media
+
+- Annoucement: https://blog.kasperhermansen.com/posts/introducing-fuzzy-clone/
