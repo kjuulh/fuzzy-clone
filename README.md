@@ -28,16 +28,12 @@ GITHUB_TOKEN=#<github token>
 GITEA_TOKEN=#<gitea token>
 ```
 
-## Prerequisites
-
-Fuzzy-clone currently requires fzf and gh (github-cli) to function
-
 ## Usage
 
 ```
 # Pick a repo
 fuzzy-clone
 
-# Update cache
+# Update cache (that way fuzzy-clone will be next to instant, run this regularly, we recommend using one of the scripts in shell/zsh/script)
 fuzzy-clone cache update
 ```
