@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 
 	"github.com/adrg/xdg"
 	"github.com/google/go-github/v60/github"
@@ -319,10 +320,20 @@ func main() {
 				repos = toRepos(gitHubRepos)
 			}
 
+			providers := make(map[string]struct{})
+
+			for _, repo := range repos {
+				providers[repo.Provider()] = struct{}{}
+			}
+
 			// 2. Choose
 			idx, err := fuzzyfinder.Find(
 				repos,
 				func(i int) string {
+					if len(providers) == 1 {
+						return strings.TrimPrefix(repos[i].ToString(), fmt.Sprintf("%s/", repos[i].Provider()))
+					}
+
 					return repos[i].ToString()
 				},
 			)
