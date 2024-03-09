@@ -49,8 +49,8 @@ brews:
       # zsh
       echo 'eval "$(fuzzy-clone init zsh)"' >> ~/.zshrc
 
-      # Remember to run, otherwise other commands will be quite slow
-      fuzzy-clone cache update 
+      fz # to search for repos
+
 
     homepage: "https://kasperhermansen.com"
 

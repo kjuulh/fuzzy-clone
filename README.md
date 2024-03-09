@@ -18,6 +18,8 @@ go install github.com/kjuulh/fuzzy-clone@latest
 
 ```bash
 brew install kjuulh/brew/fuzzy-clone  
+
+fz
 ```
 
 ## Setup
@@ -28,6 +30,8 @@ Setup the utility scripts
 
 ```bash
 echo 'eval "$(fuzzy-clone init zsh)" >> ~/.zshrc' 
+
+fz
 ```
 
 ## Usage
@@ -44,7 +48,6 @@ fuzzy-clone cache update
 Fuzzy clone either uses 
 
 ```bash
-
 # Home
 FUZZY_CLONE_ROOT=$HOME/git # default
 # Will produce a structure like so once a repo is cloned

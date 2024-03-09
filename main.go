@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"fuzzy-clone/internal/shell"
 	"log"
 	"os"
 	"os/exec"
@@ -378,7 +379,10 @@ func main() {
 		},
 	}
 
-	cmd.AddCommand(cacheCommand())
+	cmd.AddCommand(
+		cacheCommand(),
+		shell.InitCmd(),
+	)
 
 	if err := cmd.Execute(); err != nil {
 		fmt.Println(err)
