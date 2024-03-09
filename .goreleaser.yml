@@ -59,4 +59,4 @@ brews:
     #
     # Template: allowed
     test: |
-      system "#{bin} --version"
+      system "#{bin}/fuzzy-clone --version"
