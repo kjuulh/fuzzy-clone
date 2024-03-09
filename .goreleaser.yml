@@ -28,6 +28,10 @@ changelog:
 
 brews:
   - name: fuzzy-clone
+    repository:
+      owner: kjuulh
+      name: homebrew-fuzzy-clone
+      token: "{{.Env.TAP_GITHUB_TOKEN}}"
 
     download_strategy: CurlDownloadStrategy
 
