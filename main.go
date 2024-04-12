@@ -49,8 +49,10 @@ func (*GitHubRepository) Provider() string {
 }
 
 func (g *GitHubRepository) GetOrClone(ctx context.Context, root string) (string, error) {
-	destDir := path.Join("$HOME/git", g.Provider(), g.FullName)
-	destDir = os.ExpandEnv(destDir)
+	destDir, err := g.getFilePath()
+	if err != nil {
+		return "", err
+	}
 
 	if _, err := os.Stat(destDir); errors.Is(err, os.ErrNotExist) {
 		if err := os.MkdirAll(destDir, 0o755); err != nil {
@@ -100,6 +102,29 @@ func (g *GitHubRepository) GetOrClone(ctx context.Context, root string) (string,
 		return "", fmt.Errorf("failed to clone repository: %s", g.FullName)
 	}
 
+	return destDir, nil
+}
+
+func (g *GitHubRepository) getFilePath() (string, error) {
+	var (
+		destDir  string
+		envConst = "USE_CWD"
+	)
+
+	if os.Getenv(envConst) == "true" {
+		cwdPath, err := os.Getwd()
+		if err != nil {
+			return "", err
+		}
+
+		_, repoName := path.Split(g.FullName)
+		destDir = path.Join(cwdPath, repoName)
+
+		return destDir, nil
+	}
+
+	destDir = path.Join("$HOME/git", g.Provider(), g.FullName)
+	destDir = os.ExpandEnv(destDir)
 	return destDir, nil
 }
 
@@ -268,22 +293,32 @@ func getUserRepos(ctx context.Context, client *github.Client, page int) ([]*gith
 	return append(repos, moreRepos...), nil
 }
 
-func getGitHubToken() string {
+var (
+	ErrNoTokenFound = errors.New("no Github token found")
+	ErrUnknown      = errors.New("unknown error")
+)
+
+func getGitHubToken() (string, error) {
 	token := os.Getenv("FUZZY_CLONE_GITHUB_TOKEN")
 	if token != "" {
-		return token
+		return token, nil
 	}
 
 	token = os.Getenv("GITHUB_ACCESS_TOKEN")
 	if token != "" {
-		return token
+		return token, nil
 	}
 
-	if output, err := exec.Command("gh", "auth", "token").Output(); err != nil {
-		return string(output)
+	output, err := exec.Command("gh", "auth", "token").Output()
+	if err != nil {
+		return "", fmt.Errorf("%w: %w", ErrUnknown, err)
+	} else {
+		if len(output) != 0 {
+			return strings.Replace(string(output), "\n", "", 1), nil // exec.Command appends a "\n"... Remove this
+		}
 	}
 
-	return ""
+	return "", ErrNoTokenFound
 }
 
 func getHomeOrDefault() string {
@@ -296,9 +331,9 @@ func getHomeOrDefault() string {
 }
 
 func (g *GitHubProvider) Get(ctx context.Context) ([]*GitHubRepository, error) {
-
-	token := getGitHubToken()
+	token, err := getGitHubToken()
 	if token == "" {
+		log.Printf("auth error: %v", err)
 		return nil, fmt.Errorf("a token is required for github, follow setup in readme, and remember that the token should have at least repo:read, or consider installing the github-cli (gh) utility")
 	}
 
@@ -330,12 +365,20 @@ func (g *GitHubProvider) Get(ctx context.Context) ([]*GitHubRepository, error) {
 }
 
 func main() {
+	var (
+		useCwd = false
+	)
+
 	cmd := cobra.Command{
 		Use: "fuzzy-clone",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 
 			cache := NewCache()
+
+			if useCwd {
+				os.Setenv("USE_CWD", "true")
+			}
 
 			repos, exists, err := cache.Get(ctx)
 			if err != nil {
@@ -394,6 +437,7 @@ func main() {
 		},
 	}
 
+	cmd.Flags().BoolVarP(&useCwd, "use_cwd", "c", false, "when set, clone repo into CWD")
 	cmd.AddCommand(
 		cacheCommand(),
 		shell.InitCmd(),
