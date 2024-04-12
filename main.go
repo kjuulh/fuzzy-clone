@@ -108,7 +108,7 @@ func (g *GitHubRepository) GetOrClone(ctx context.Context, root string) (string,
 func (g *GitHubRepository) getFilePath() (string, error) {
 	var (
 		destDir  string
-		envConst string = "USE_CWD"
+		envConst = "USE_CWD"
 	)
 
 	if os.Getenv(envConst) == "true" {
@@ -293,6 +293,11 @@ func getUserRepos(ctx context.Context, client *github.Client, page int) ([]*gith
 	return append(repos, moreRepos...), nil
 }
 
+var (
+	ErrNoTokenFound = errors.New("no Github token found")
+	ErrUnknown      = errors.New("unknown error")
+)
+
 func getGitHubToken() (string, error) {
 	token := os.Getenv("FUZZY_CLONE_GITHUB_TOKEN")
 	if token != "" {
@@ -306,15 +311,14 @@ func getGitHubToken() (string, error) {
 
 	output, err := exec.Command("gh", "auth", "token").Output()
 	if err != nil {
-		return "", fmt.Errorf("fail using gh as auth: %w", err)
+		return "", fmt.Errorf("%w: %w", ErrUnknown, err)
+	} else {
+		if len(output) != 0 {
+			return strings.Replace(string(output), "\n", "", 1), nil // exec.Command appends a "\n"... Remove this
+		}
 	}
 
-	if len(output) == 0 {
-		return "", fmt.Errorf("fail using gh as auth: No Github token returned")
-	}
-
-	token = strings.Replace(string(output), "\n", "", 1) // exec.Command appends a "\n"... Remove this
-	return token, nil
+	return "", ErrNoTokenFound
 }
 
 func getHomeOrDefault() string {
@@ -329,7 +333,7 @@ func getHomeOrDefault() string {
 func (g *GitHubProvider) Get(ctx context.Context) ([]*GitHubRepository, error) {
 	token, err := getGitHubToken()
 	if token == "" {
-		fmt.Printf("auth error: %v", err)
+		log.Printf("auth error: %v", err)
 		return nil, fmt.Errorf("a token is required for github, follow setup in readme, and remember that the token should have at least repo:read, or consider installing the github-cli (gh) utility")
 	}
 
@@ -361,6 +365,10 @@ func (g *GitHubProvider) Get(ctx context.Context) ([]*GitHubRepository, error) {
 }
 
 func main() {
+	var (
+		useCwd = false
+	)
+
 	cmd := cobra.Command{
 		Use: "fuzzy-clone",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -368,8 +376,7 @@ func main() {
 
 			cache := NewCache()
 
-			useCwd := cmd.Flag("use_cwd").Value.String()
-			if useCwd == "true" {
+			if useCwd {
 				os.Setenv("USE_CWD", "true")
 			}
 
@@ -430,7 +437,7 @@ func main() {
 		},
 	}
 
-	cmd.Flags().BoolP("use_cwd", "c", false, "when set, clones into cwd")
+	cmd.Flags().BoolVarP(&useCwd, "use_cwd", "c", false, "when set, clone repo into CWD")
 	cmd.AddCommand(
 		cacheCommand(),
 		shell.InitCmd(),
@@ -490,14 +497,4 @@ func cacheClearCommand() *cobra.Command {
 			return nil
 		},
 	}
-}
-
-func argsHasCwd(args []string) bool {
-	for _, arg := range args {
-		if arg == "--cwd" {
-			return true
-		}
-	}
-
-	return false
 }
