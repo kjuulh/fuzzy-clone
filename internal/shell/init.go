@@ -2,6 +2,7 @@ package shell
 
 import (
 	"fmt"
+	"fuzzy-clone/shell/fish"
 	"fuzzy-clone/shell/zsh"
 
 	"github.com/spf13/cobra"
@@ -14,6 +15,7 @@ func InitCmd() *cobra.Command {
 
 	cmd.AddCommand(
 		zshCmd(),
+		fishCmd(),
 	)
 
 	return &cmd
@@ -26,6 +28,17 @@ func zshCmd() *cobra.Command {
 			zshScript := zsh.Get()
 
 			fmt.Println(zshScript)
+		},
+	}
+}
+
+func fishCmd() *cobra.Command {
+	return &cobra.Command{
+		Use: "fish",
+		Run: func(cmd *cobra.Command, args []string) {
+			fishScript := fish.Get()
+
+			fmt.Println(fishScript)
 		},
 	}
 }
