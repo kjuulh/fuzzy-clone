@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"fuzzy-clone/internal/shell"
 	"log"
 	"os"
 	"os/exec"
 	"path"
 	"strings"
+	"time"
+
+	"fuzzy-clone/internal/shell"
 
 	"github.com/adrg/xdg"
 	"github.com/google/go-github/v60/github"
@@ -240,8 +242,44 @@ func (c *Cache) path() string {
 	return path.Join(c.location, c.fileName)
 }
 
-type GitHubProvider struct {
+func (c *Cache) timestampPath() string {
+	return path.Join(c.location, "last_update")
 }
+
+func (c *Cache) needsUpdate() (bool, error) {
+	timestampBytes, err := os.ReadFile(c.timestampPath())
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			// No timestamp file means we need to update
+			return true, nil
+		}
+		return false, fmt.Errorf("failed to read timestamp file: %w", err)
+	}
+
+	lastUpdate, err := time.Parse(time.RFC3339, strings.TrimSpace(string(timestampBytes)))
+	if err != nil {
+		// If we can't parse the timestamp, assume we need to update
+		return true, nil
+	}
+
+	// Check if 24 hours have passed
+	return time.Since(lastUpdate) >= 24*time.Hour, nil
+}
+
+func (c *Cache) updateTimestamp() error {
+	if err := os.MkdirAll(c.location, 0o755); err != nil {
+		return fmt.Errorf("failed to create cache location: %w", err)
+	}
+
+	timestamp := time.Now().Format(time.RFC3339)
+	if err := os.WriteFile(c.timestampPath(), []byte(timestamp), 0o644); err != nil {
+		return fmt.Errorf("failed to write timestamp file: %w", err)
+	}
+
+	return nil
+}
+
+type GitHubProvider struct{}
 
 func NewGitHubProvider() *GitHubProvider {
 	return &GitHubProvider{}
@@ -365,9 +403,7 @@ func (g *GitHubProvider) Get(ctx context.Context) ([]*GitHubRepository, error) {
 }
 
 func main() {
-	var (
-		useCwd = false
-	)
+	useCwd := false
 
 	cmd := cobra.Command{
 		Use: "fuzzy-clone",
@@ -461,25 +497,48 @@ func cacheCommand() *cobra.Command {
 }
 
 func cacheUpdateCommand() *cobra.Command {
-	return &cobra.Command{
+	var force bool
+
+	cmd := &cobra.Command{
 		Use: "update",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			cache := NewCache()
+
+			// Check if cache needs updating (unless --force is set)
+			if !force {
+				needsUpdate, err := cache.needsUpdate()
+				if err != nil {
+					return fmt.Errorf("failed to check cache timestamp: %w", err)
+				}
+
+				if !needsUpdate {
+					// Cache was updated within the last 24 hours, skip update
+					return nil
+				}
+			}
 
 			repos, err := NewGitHubProvider().Get(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to get github user: %w", err)
 			}
 
-			cache := NewCache()
-
 			if err := cache.Update(ctx, toRepos(repos)); err != nil {
 				return fmt.Errorf("failed to update cache: %w", err)
+			}
+
+			// Update the timestamp after successful cache update
+			if err := cache.updateTimestamp(); err != nil {
+				return fmt.Errorf("failed to update timestamp: %w", err)
 			}
 
 			return nil
 		},
 	}
+
+	cmd.Flags().BoolVarP(&force, "force", "f", false, "force cache update even if updated within the last 24 hours")
+
+	return cmd
 }
 
 func cacheClearCommand() *cobra.Command {
