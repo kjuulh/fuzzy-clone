@@ -506,7 +506,8 @@ func cacheUpdateCommand() *cobra.Command {
 			cache := NewCache()
 
 			// Check if cache needs updating (unless --force is set)
-			if !force {
+			// Only apply cooldown if FUZZY_CLONE_CACHE_COOLDOWN is set to "true"
+			if !force && os.Getenv("FUZZY_CLONE_CACHE_COOLDOWN") == "true" {
 				needsUpdate, err := cache.needsUpdate()
 				if err != nil {
 					return fmt.Errorf("failed to check cache timestamp: %w", err)
