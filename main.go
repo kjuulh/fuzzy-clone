@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path"
@@ -58,13 +59,13 @@ func (g *GitHubRepository) GetOrClone(ctx context.Context, root string) (string,
 
 	if _, err := os.Stat(destDir); errors.Is(err, os.ErrNotExist) {
 		if err := os.MkdirAll(destDir, 0o755); err != nil {
-			return "", fmt.Errorf("failed to prepare git dir: %w", err)
+			return "", fmt.Errorf("prepare git dir: %w", err)
 		}
 	}
 
 	entries, err := os.ReadDir(destDir)
 	if err != nil {
-		return "", fmt.Errorf("failed to read %s, %w", destDir, err)
+		return "", fmt.Errorf("read destination dir entries in %s: %w", destDir, err)
 	}
 
 	if len(entries) == 0 {
@@ -98,10 +99,10 @@ func (g *GitHubRepository) GetOrClone(ctx context.Context, root string) (string,
 				return destDir, nil
 			}
 
-			return "", fmt.Errorf("failed to clone with http: %w", err)
+			return "", fmt.Errorf("clone with http: %w", err)
 		}
 
-		return "", fmt.Errorf("failed to clone repository: %s", g.FullName)
+		return "", fmt.Errorf("clone repository: %s", g.FullName)
 	}
 
 	return destDir, nil
@@ -175,12 +176,12 @@ func (c *Cache) Get(ctx context.Context) ([]Repository, bool, error) {
 			return nil, false, nil
 		}
 
-		return nil, false, fmt.Errorf("failed to read cache file: %w", err)
+		return nil, false, fmt.Errorf("read cache file: %w", err)
 	}
 
 	var groupedRepos cachedRepositories
 	if err := json.Unmarshal(contents, &groupedRepos); err != nil {
-		return nil, false, fmt.Errorf("failed to unmarshal: %s, %w", c.path(), err)
+		return nil, false, fmt.Errorf("unmarshal cached repos: %s, %w", c.path(), err)
 	}
 
 	repos := groupedRepos.ToRepos()
@@ -206,21 +207,21 @@ func (c *Cache) Update(ctx context.Context, repos []Repository) error {
 
 	output, err := json.MarshalIndent(groupedRepos, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal cache: %w", err)
+		return fmt.Errorf("marshal cache: %w", err)
 	}
 
 	if err := os.MkdirAll(c.location, 0o755); err != nil {
-		return fmt.Errorf("failed to create cache location: %w", err)
+		return fmt.Errorf("create cache location: %w", err)
 	}
 
 	file, err := os.Create(c.path())
 	if err != nil {
-		return fmt.Errorf("failed to create cache file: %w", err)
+		return fmt.Errorf("create cache file: %w", err)
 	}
 
 	_, err = file.Write(output)
 	if err != nil {
-		return fmt.Errorf("failed to write to cache: %w", err)
+		return fmt.Errorf("write to cache: %w", err)
 	}
 
 	return nil
@@ -253,11 +254,12 @@ func (c *Cache) needsUpdate() (bool, error) {
 			// No timestamp file means we need to update
 			return true, nil
 		}
-		return false, fmt.Errorf("failed to read timestamp file: %w", err)
+		return false, fmt.Errorf("read timestamp file: %w", err)
 	}
 
 	lastUpdate, err := time.Parse(time.RFC3339, strings.TrimSpace(string(timestampBytes)))
 	if err != nil {
+		slog.Debug("Parsing timestamp to RFC3339 failed", "timestamp", timestampBytes, "error", err.Error())
 		// If we can't parse the timestamp, assume we need to update
 		return true, nil
 	}
@@ -268,12 +270,12 @@ func (c *Cache) needsUpdate() (bool, error) {
 
 func (c *Cache) updateTimestamp() error {
 	if err := os.MkdirAll(c.location, 0o755); err != nil {
-		return fmt.Errorf("failed to create cache location: %w", err)
+		return fmt.Errorf("create cache folder: %w", err)
 	}
 
 	timestamp := time.Now().Format(time.RFC3339)
 	if err := os.WriteFile(c.timestampPath(), []byte(timestamp), 0o644); err != nil {
-		return fmt.Errorf("failed to write timestamp file: %w", err)
+		return fmt.Errorf("write timestamp file: %w", err)
 	}
 
 	return nil
@@ -425,7 +427,7 @@ func main() {
 				// 1. Gather
 				gitHubRepos, err := NewGitHubProvider().Get(ctx)
 				if err != nil {
-					return fmt.Errorf("failed to get repos for github user: %w", err)
+					return fmt.Errorf("retrieve list of repos for github user: %w", err)
 				}
 
 				repos = toRepos(gitHubRepos)
@@ -461,12 +463,12 @@ func main() {
 			// 3. Clone
 			destDir, err := repo.GetOrClone(ctx, "tmp")
 			if err != nil {
-				return fmt.Errorf("failed to get repository: %w", err)
+				return fmt.Errorf("clone repository: %w", err)
 			}
 
 			// 4. Print location
 			if _, err := fmt.Println(destDir); err != nil {
-				return fmt.Errorf("failed to print destination directory: %w", err)
+				return fmt.Errorf("print destination directory: %w", err)
 			}
 
 			return nil
@@ -510,7 +512,7 @@ func cacheUpdateCommand() *cobra.Command {
 			if !force && os.Getenv("FUZZY_CLONE_CACHE_COOLDOWN") == "true" {
 				needsUpdate, err := cache.needsUpdate()
 				if err != nil {
-					return fmt.Errorf("failed to check cache timestamp: %w", err)
+					return fmt.Errorf("check cache needs update: %w", err)
 				}
 
 				if !needsUpdate {
@@ -521,16 +523,16 @@ func cacheUpdateCommand() *cobra.Command {
 
 			repos, err := NewGitHubProvider().Get(ctx)
 			if err != nil {
-				return fmt.Errorf("failed to get github user: %w", err)
+				return fmt.Errorf("get github repo list for user: %w", err)
 			}
 
 			if err := cache.Update(ctx, toRepos(repos)); err != nil {
-				return fmt.Errorf("failed to update cache: %w", err)
+				return fmt.Errorf("update cache: %w", err)
 			}
 
 			// Update the timestamp after successful cache update
 			if err := cache.updateTimestamp(); err != nil {
-				return fmt.Errorf("failed to update timestamp: %w", err)
+				return fmt.Errorf("update cache timestamp: %w", err)
 			}
 
 			return nil
@@ -551,7 +553,7 @@ func cacheClearCommand() *cobra.Command {
 			cache := NewCache()
 
 			if err := cache.Clear(ctx); err != nil {
-				return fmt.Errorf("failed to clear cache: %w", err)
+				return fmt.Errorf("clearing cache: %w", err)
 			}
 
 			return nil
