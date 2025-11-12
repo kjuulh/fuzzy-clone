@@ -12,11 +12,15 @@ import (
 	"strings"
 	"time"
 
+	"fuzzy-clone/internal/config"
 	"fuzzy-clone/internal/shell"
 
+	"github.com/BurntSushi/toml"
 	"github.com/adrg/xdg"
+	"github.com/golang-cz/devslog"
 	"github.com/google/go-github/v60/github"
 	"github.com/ktr0731/go-fuzzyfinder"
+	altsrc "github.com/urfave/cli-altsrc/v3"
 	"github.com/urfave/cli/v3"
 	"golang.org/x/oauth2"
 )
@@ -415,6 +419,10 @@ func (g *GitHubProvider) Get(ctx context.Context, cfg *Config) ([]*GitHubReposit
 	return gitHubRepos, nil
 }
 
+func tomlSource(key string) *altsrc.ValueSource {
+	return altsrc.NewValueSource(toml.Unmarshal, "toml", key, config.ConfigFile)
+}
+
 func main() {
 	var cfg Config
 
@@ -422,23 +430,55 @@ func main() {
 		Name:  "fuzzy-clone",
 		Usage: "Fuzzy find and clone repositories",
 		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:  "log-level",
+				Value: "info",
+				Action: func(ctx context.Context, c *cli.Command, s string) error {
+					var level slog.Level
+
+					switch strings.TrimSpace(strings.ToLower(s)) {
+					case "debug":
+						level = slog.LevelDebug
+					case "info":
+						level = slog.LevelInfo
+					case "warn":
+						level = slog.LevelWarn
+					case "error":
+						level = slog.LevelError
+					case "off":
+						slog.SetDefault(slog.New(slog.DiscardHandler))
+						return nil
+					default:
+						return fmt.Errorf("unsupported log level value: %s", s)
+					}
+
+					slog.SetDefault(slog.New(devslog.NewHandler(os.Stderr, &devslog.Options{
+						HandlerOptions: &slog.HandlerOptions{
+							Level: level,
+						},
+					})))
+
+					return nil
+				},
+			},
+
 			&cli.BoolFlag{
 				Name:        "use-cwd",
 				Aliases:     []string{"c"},
 				Usage:       "when set, clone repo into CWD",
-				Sources:     cli.EnvVars("FUZZY_CLONE_USE_CWD"),
+				Sources:     cli.NewValueSourceChain(cli.EnvVar("FUZZY_CLONE_USE_CWD"), tomlSource("use_cwd")),
 				Destination: &cfg.UseCwd,
 			},
 			&cli.BoolFlag{
 				Name:        "flatten-destination",
 				Usage:       "when set, the destination path will no longer be namespaces, and instead just put in the root folder",
-				Sources:     cli.EnvVars("FUZZY_CLONE_FLATTEN_DESTINATION"),
+				Sources:     cli.NewValueSourceChain(cli.EnvVar("FUZZY_CLONE_FLATTEN_DESTINATION"), tomlSource("flatten_destination")),
 				Destination: &cfg.FlattenDestination,
 			},
 			&cli.StringFlag{
 				Name:        "github-token",
 				Usage:       "GitHub personal access token",
-				Sources:     cli.EnvVars("FUZZY_CLONE_GITHUB_TOKEN"),
+				Sources:     cli.NewValueSourceChain(cli.EnvVar("FUZZY_CLONE_GITHUB_TOKEN"), tomlSource("github.token")),
 				Destination: &cfg.GitHubToken,
 			},
 			&cli.StringFlag{
@@ -450,17 +490,22 @@ func main() {
 			&cli.StringFlag{
 				Name:        "root",
 				Usage:       "Root directory for cloning repositories",
-				Sources:     cli.EnvVars("FUZZY_CLONE_ROOT"),
+				Sources:     cli.NewValueSourceChain(cli.EnvVar("FUZZY_CLONE_ROOT"), tomlSource("root")),
 				Destination: &cfg.Root,
 			},
 			&cli.StringFlag{
 				Name:        "cache-cooldown",
 				Usage:       "Enable cache cooldown (true/false)",
-				Sources:     cli.EnvVars("FUZZY_CLONE_CACHE_COOLDOWN"),
+				Sources:     cli.NewValueSourceChain(cli.EnvVar("FUZZY_CLONE_CACHE_COOLDOWN"), tomlSource("cache.cooldown")),
 				Destination: &cfg.CacheCooldown,
 			},
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
+			slog.DebugContext(ctx,
+				"current settings",
+				"cfg", cfg,
+			)
+
 			cache := NewCache()
 
 			repos, exists, err := cache.Get(ctx)
@@ -521,6 +566,14 @@ func main() {
 		Commands: []*cli.Command{
 			cacheCommand(&cfg),
 			shell.InitCmd(),
+			&cli.Command{
+				Name: "doctor",
+				Action: func(ctx context.Context, c *cli.Command) error {
+					fmt.Fprintf(c.Writer, "config_file: %s, exists: %s\n", config.ConfigFile.SourceURI(), configFileExists())
+
+					return nil
+				},
+			},
 		},
 	}
 
@@ -528,6 +581,19 @@ func main() {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+}
+
+func configFileExists() string {
+	_, err := os.Stat(config.ConfigFile.SourceURI())
+	if errors.Is(err, os.ErrNotExist) {
+		return "nope"
+	}
+
+	if err != nil {
+		return err.Error()
+	}
+
+	return "yep"
 }
 
 func cacheCommand(cfg *Config) *cli.Command {
