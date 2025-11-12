@@ -24,7 +24,7 @@ import (
 
 type Repository interface {
 	Provider() string
-	GetOrClone(ctx context.Context, root string) (string, error)
+	GetOrClone(ctx context.Context, root string, useCwd bool) (string, error)
 	ToString() string
 }
 
@@ -51,8 +51,8 @@ func (*GitHubRepository) Provider() string {
 	return "github.com"
 }
 
-func (g *GitHubRepository) GetOrClone(ctx context.Context, root string) (string, error) {
-	destDir, err := g.getFilePath()
+func (g *GitHubRepository) GetOrClone(ctx context.Context, root string, useCwd bool) (string, error) {
+	destDir, err := g.getFilePath(useCwd)
 	if err != nil {
 		return "", err
 	}
@@ -77,7 +77,7 @@ func (g *GitHubRepository) GetOrClone(ctx context.Context, root string) (string,
 				return err
 			}
 
-			log.Println("Downloading...")
+			fmt.Fprintln(os.Stderr, "Downloading...")
 
 			if err := process.Wait(); err != nil {
 				return err
@@ -108,13 +108,12 @@ func (g *GitHubRepository) GetOrClone(ctx context.Context, root string) (string,
 	return destDir, nil
 }
 
-func (g *GitHubRepository) getFilePath() (string, error) {
+func (g *GitHubRepository) getFilePath(useCwd bool) (string, error) {
 	var (
-		destDir  string
-		envConst = "USE_CWD"
+		destDir string
 	)
 
-	if os.Getenv(envConst) == "true" {
+	if useCwd {
 		cwdPath, err := os.Getwd()
 		if err != nil {
 			return "", err
@@ -414,10 +413,6 @@ func main() {
 
 			cache := NewCache()
 
-			if useCwd {
-				os.Setenv("USE_CWD", "true")
-			}
-
 			repos, exists, err := cache.Get(ctx)
 			if err != nil {
 				return fmt.Errorf("cache corrupted: %w", err)
@@ -461,7 +456,7 @@ func main() {
 			repo := repos[idx]
 
 			// 3. Clone
-			destDir, err := repo.GetOrClone(ctx, "tmp")
+			destDir, err := repo.GetOrClone(ctx, "tmp", useCwd)
 			if err != nil {
 				return fmt.Errorf("clone repository: %w", err)
 			}
