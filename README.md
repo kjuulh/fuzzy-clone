@@ -8,6 +8,8 @@ Fuzzy clone is a repository picker and downloader. It exists for one purpose, so
 
 Fuzzy clone simply presents a list of your subscribed orgs, and you fuzzy search, hit enter and you're placed in the repo, simply as that.
 
+> Gitnow is a slightly more robust tool, by @kjuulh as well, https://github.com/kjuulh/gitnow, it features the same toolset, but allows for more expansive configuration
+
 ## Install
 
 ### Golang
