@@ -65,6 +65,15 @@ GITHUB_ACCESS_TOKEN=#<github token>
 
 > Your *github token* should have repo:read at least. Consider adding org:read as well if you need access to org repos
 
+### Config file
+
+Fuzzy clone supports setting options via. a config file as well. `~/.config/fz/config.toml`
+
+An example file can be generated using: `fuzzy-clone init config --write`, without the --write flag it will just write it to stdout
+
+All options are documented in the example output
+
+
 # Media
 
 - Annoucement: https://blog.kasperhermansen.com/posts/introducing-fuzzy-clone/
