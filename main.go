@@ -18,7 +18,7 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/google/go-github/v60/github"
 	"github.com/ktr0731/go-fuzzyfinder"
-	"github.com/spf13/cobra"
+	"github.com/urfave/cli/v3"
 	"golang.org/x/oauth2"
 )
 
@@ -337,15 +337,21 @@ var (
 	ErrUnknown      = errors.New("unknown error")
 )
 
-func getGitHubToken() (string, error) {
-	token := os.Getenv("FUZZY_CLONE_GITHUB_TOKEN")
-	if token != "" {
-		return token, nil
+type Config struct {
+	GitHubToken       string
+	GitHubAccessToken string
+	Root              string
+	CacheCooldown     string
+	UseCwd            bool
+}
+
+func getGitHubToken(cfg *Config) (string, error) {
+	if cfg.GitHubToken != "" {
+		return cfg.GitHubToken, nil
 	}
 
-	token = os.Getenv("GITHUB_ACCESS_TOKEN")
-	if token != "" {
-		return token, nil
+	if cfg.GitHubAccessToken != "" {
+		return cfg.GitHubAccessToken, nil
 	}
 
 	output, err := exec.Command("gh", "auth", "token").Output()
@@ -360,17 +366,16 @@ func getGitHubToken() (string, error) {
 	return "", ErrNoTokenFound
 }
 
-func getHomeOrDefault() string {
-	home := os.Getenv("FUZZY_CLONE_ROOT")
-	if home != "" {
-		return home
+func getHomeOrDefault(cfg *Config) string {
+	if cfg.Root != "" {
+		return cfg.Root
 	}
 
 	return os.ExpandEnv("$HOME/git")
 }
 
-func (g *GitHubProvider) Get(ctx context.Context) ([]*GitHubRepository, error) {
-	token, err := getGitHubToken()
+func (g *GitHubProvider) Get(ctx context.Context, cfg *Config) ([]*GitHubRepository, error) {
+	token, err := getGitHubToken(cfg)
 	if token == "" {
 		log.Printf("auth error: %v", err)
 		return nil, fmt.Errorf("a token is required for github, follow setup in readme, and remember that the token should have at least repo:read, or consider installing the github-cli (gh) utility")
@@ -404,13 +409,45 @@ func (g *GitHubProvider) Get(ctx context.Context) ([]*GitHubRepository, error) {
 }
 
 func main() {
-	useCwd := false
+	var cfg Config
 
-	cmd := cobra.Command{
-		Use: "fuzzy-clone",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-
+	app := &cli.Command{
+		Name:  "fuzzy-clone",
+		Usage: "Fuzzy find and clone repositories",
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:        "use-cwd",
+				Aliases:     []string{"c"},
+				Usage:       "when set, clone repo into CWD",
+				Sources:     cli.EnvVars("FUZZY_CLONE_USE_CWD"),
+				Destination: &cfg.UseCwd,
+			},
+			&cli.StringFlag{
+				Name:        "github-token",
+				Usage:       "GitHub personal access token",
+				Sources:     cli.EnvVars("FUZZY_CLONE_GITHUB_TOKEN"),
+				Destination: &cfg.GitHubToken,
+			},
+			&cli.StringFlag{
+				Name:        "github-access-token",
+				Usage:       "GitHub access token (alternative)",
+				Sources:     cli.EnvVars("GITHUB_ACCESS_TOKEN"),
+				Destination: &cfg.GitHubAccessToken,
+			},
+			&cli.StringFlag{
+				Name:        "root",
+				Usage:       "Root directory for cloning repositories",
+				Sources:     cli.EnvVars("FUZZY_CLONE_ROOT"),
+				Destination: &cfg.Root,
+			},
+			&cli.StringFlag{
+				Name:        "cache-cooldown",
+				Usage:       "Enable cache cooldown (true/false)",
+				Sources:     cli.EnvVars("FUZZY_CLONE_CACHE_COOLDOWN"),
+				Destination: &cfg.CacheCooldown,
+			},
+		},
+		Action: func(ctx context.Context, c *cli.Command) error {
 			cache := NewCache()
 
 			repos, exists, err := cache.Get(ctx)
@@ -420,7 +457,7 @@ func main() {
 
 			if !exists {
 				// 1. Gather
-				gitHubRepos, err := NewGitHubProvider().Get(ctx)
+				gitHubRepos, err := NewGitHubProvider().Get(ctx, &cfg)
 				if err != nil {
 					return fmt.Errorf("retrieve list of repos for github user: %w", err)
 				}
@@ -456,7 +493,7 @@ func main() {
 			repo := repos[idx]
 
 			// 3. Clone
-			destDir, err := repo.GetOrClone(ctx, "tmp", useCwd)
+			destDir, err := repo.GetOrClone(ctx, "tmp", cfg.UseCwd)
 			if err != nil {
 				return fmt.Errorf("clone repository: %w", err)
 			}
@@ -468,43 +505,49 @@ func main() {
 
 			return nil
 		},
+		Commands: []*cli.Command{
+			cacheCommand(&cfg),
+			shell.InitCmd(),
+		},
 	}
 
-	cmd.Flags().BoolVarP(&useCwd, "use_cwd", "c", false, "when set, clone repo into CWD")
-	cmd.AddCommand(
-		cacheCommand(),
-		shell.InitCmd(),
-	)
-
-	if err := cmd.Execute(); err != nil {
+	if err := app.Run(context.Background(), os.Args); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 }
 
-func cacheCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use: "cache",
+func cacheCommand(cfg *Config) *cli.Command {
+	return &cli.Command{
+		Name:  "cache",
+		Usage: "Manage repository cache",
+		Commands: []*cli.Command{
+			cacheUpdateCommand(cfg),
+			cacheClearCommand(),
+		},
 	}
-
-	cmd.AddCommand(cacheUpdateCommand())
-	cmd.AddCommand(cacheClearCommand())
-
-	return cmd
 }
 
-func cacheUpdateCommand() *cobra.Command {
+func cacheUpdateCommand(cfg *Config) *cli.Command {
 	var force bool
 
-	cmd := &cobra.Command{
-		Use: "update",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
+	return &cli.Command{
+		Name:  "update",
+		Usage: "Update the repository cache",
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:        "force",
+				Aliases:     []string{"f"},
+				Usage:       "force cache update even if updated within the last 24 hours",
+				Destination: &force,
+			},
+		},
+		Action: func(ctx context.Context, c *cli.Command) error {
 			cache := NewCache()
 
 			// Check if cache needs updating (unless --force is set)
 			// Only apply cooldown if FUZZY_CLONE_CACHE_COOLDOWN is set to "true"
-			if !force && os.Getenv("FUZZY_CLONE_CACHE_COOLDOWN") == "true" {
+			if !force && cfg.CacheCooldown == "true" {
 				needsUpdate, err := cache.needsUpdate()
 				if err != nil {
 					return fmt.Errorf("check cache needs update: %w", err)
@@ -516,7 +559,7 @@ func cacheUpdateCommand() *cobra.Command {
 				}
 			}
 
-			repos, err := NewGitHubProvider().Get(ctx)
+			repos, err := NewGitHubProvider().Get(ctx, cfg)
 			if err != nil {
 				return fmt.Errorf("get github repo list for user: %w", err)
 			}
@@ -533,18 +576,13 @@ func cacheUpdateCommand() *cobra.Command {
 			return nil
 		},
 	}
-
-	cmd.Flags().BoolVarP(&force, "force", "f", false, "force cache update even if updated within the last 24 hours")
-
-	return cmd
 }
 
-func cacheClearCommand() *cobra.Command {
-	return &cobra.Command{
-		Use: "clear",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-
+func cacheClearCommand() *cli.Command {
+	return &cli.Command{
+		Name:  "clear",
+		Usage: "Clear the repository cache",
+		Action: func(ctx context.Context, c *cli.Command) error {
 			cache := NewCache()
 
 			if err := cache.Clear(ctx); err != nil {

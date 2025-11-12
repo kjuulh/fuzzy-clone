@@ -1,8 +1,0 @@
-name: fuzzy-clone
-description: Enhances your experience with shuttle.
-provider: 
-  github-release:
-    owner: kjuulh
-    repo: fuzzy-clone
-registry:
-  github: kjuulh/shuttle-extensions
