@@ -14,9 +14,11 @@ import (
 
 	"fuzzy-clone/internal/shell"
 
+	"github.com/BurntSushi/toml"
 	"github.com/adrg/xdg"
 	"github.com/google/go-github/v60/github"
 	"github.com/ktr0731/go-fuzzyfinder"
+	altsrc "github.com/urfave/cli-altsrc/v3"
 	"github.com/urfave/cli/v3"
 	"golang.org/x/oauth2"
 )
@@ -415,7 +417,16 @@ func (g *GitHubProvider) Get(ctx context.Context, cfg *Config) ([]*GitHubReposit
 	return gitHubRepos, nil
 }
 
+var (
+	configFile = altsrc.StringSourcer(path.Join(os.ExpandEnv("$HOME/.config"), "fz", "config.toml"))
+)
+
+func tomlSource(key string) *altsrc.ValueSource {
+	return altsrc.NewValueSource(toml.Unmarshal, "toml", key, configFile)
+}
+
 func main() {
+
 	var cfg Config
 
 	app := &cli.Command{
@@ -426,19 +437,19 @@ func main() {
 				Name:        "use-cwd",
 				Aliases:     []string{"c"},
 				Usage:       "when set, clone repo into CWD",
-				Sources:     cli.EnvVars("FUZZY_CLONE_USE_CWD"),
+				Sources:     cli.NewValueSourceChain(cli.EnvVar("FUZZY_CLONE_USE_CWD"), tomlSource("use_cwd")),
 				Destination: &cfg.UseCwd,
 			},
 			&cli.BoolFlag{
 				Name:        "flatten-destination",
 				Usage:       "when set, the destination path will no longer be namespaces, and instead just put in the root folder",
-				Sources:     cli.EnvVars("FUZZY_CLONE_FLATTEN_DESTINATION"),
+				Sources:     cli.NewValueSourceChain(cli.EnvVar("FUZZY_CLONE_FLATTEN_DESTINATION"), tomlSource("flatten_destination")),
 				Destination: &cfg.FlattenDestination,
 			},
 			&cli.StringFlag{
 				Name:        "github-token",
 				Usage:       "GitHub personal access token",
-				Sources:     cli.EnvVars("FUZZY_CLONE_GITHUB_TOKEN"),
+				Sources:     cli.NewValueSourceChain(cli.EnvVar("FUZZY_CLONE_GITHUB_TOKEN"), tomlSource("github.token")),
 				Destination: &cfg.GitHubToken,
 			},
 			&cli.StringFlag{
@@ -450,13 +461,13 @@ func main() {
 			&cli.StringFlag{
 				Name:        "root",
 				Usage:       "Root directory for cloning repositories",
-				Sources:     cli.EnvVars("FUZZY_CLONE_ROOT"),
+				Sources:     cli.NewValueSourceChain(cli.EnvVar("FUZZY_CLONE_ROOT"), tomlSource("root")),
 				Destination: &cfg.Root,
 			},
 			&cli.StringFlag{
 				Name:        "cache-cooldown",
 				Usage:       "Enable cache cooldown (true/false)",
-				Sources:     cli.EnvVars("FUZZY_CLONE_CACHE_COOLDOWN"),
+				Sources:     cli.NewValueSourceChain(cli.EnvVar("FUZZY_CLONE_CACHE_COOLDOWN"), tomlSource("cache_cooldown")),
 				Destination: &cfg.CacheCooldown,
 			},
 		},
@@ -521,6 +532,14 @@ func main() {
 		Commands: []*cli.Command{
 			cacheCommand(&cfg),
 			shell.InitCmd(),
+			&cli.Command{
+				Name: "doctor",
+				Action: func(ctx context.Context, c *cli.Command) error {
+					fmt.Fprintf(c.Writer, "config_file: %s, exists: %s\n", configFile.SourceURI(), configFileExists())
+
+					return nil
+				},
+			},
 		},
 	}
 
@@ -528,6 +547,19 @@ func main() {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+}
+
+func configFileExists() string {
+	_, err := os.Stat(configFile.SourceURI())
+	if errors.Is(err, os.ErrNotExist) {
+		return "nope"
+	}
+
+	if err != nil {
+		return err.Error()
+	}
+
+	return "yep"
 }
 
 func cacheCommand(cfg *Config) *cli.Command {
