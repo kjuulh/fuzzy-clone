@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -24,7 +23,7 @@ import (
 
 type Repository interface {
 	Provider() string
-	GetOrClone(ctx context.Context, root string, useCwd bool) (string, error)
+	GetOrClone(ctx context.Context, config *Config) (string, error)
 	ToString() string
 }
 
@@ -51,8 +50,8 @@ func (*GitHubRepository) Provider() string {
 	return "github.com"
 }
 
-func (g *GitHubRepository) GetOrClone(ctx context.Context, root string, useCwd bool) (string, error) {
-	destDir, err := g.getFilePath(useCwd)
+func (g *GitHubRepository) GetOrClone(ctx context.Context, config *Config) (string, error) {
+	destDir, err := g.getFilePath(config)
 	if err != nil {
 		return "", err
 	}
@@ -91,7 +90,7 @@ func (g *GitHubRepository) GetOrClone(ctx context.Context, root string, useCwd b
 				return destDir, nil
 			}
 
-			log.Printf("failed to clone with ssh, falling back to http: %s", err)
+			fmt.Fprintf(os.Stderr, "failed to clone with ssh, falling back to http: %s\n", err)
 		}
 
 		if g.HttpsUrl != nil {
@@ -108,15 +107,16 @@ func (g *GitHubRepository) GetOrClone(ctx context.Context, root string, useCwd b
 	return destDir, nil
 }
 
-func (g *GitHubRepository) getFilePath(useCwd bool) (string, error) {
+func (g *GitHubRepository) getFilePath(config *Config) (string, error) {
 	var (
 		destDir string
 	)
 
-	if useCwd {
+	// $pwd/fuzzy-clone
+	if config.UseCwd {
 		cwdPath, err := os.Getwd()
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("get working directory: %w", err)
 		}
 
 		_, repoName := path.Split(g.FullName)
@@ -125,9 +125,15 @@ func (g *GitHubRepository) getFilePath(useCwd bool) (string, error) {
 		return destDir, nil
 	}
 
-	destDir = path.Join("$HOME/git", g.Provider(), g.FullName)
-	destDir = os.ExpandEnv(destDir)
-	return destDir, nil
+	// ~/git/fuzzy-clone
+	if config.FlattenDestination {
+		_, repoName := path.Split(g.FullName)
+		destDir = path.Join(getHomeOrDefault(config), repoName)
+		return destDir, nil
+	}
+
+	// Full path ~/git/github.com/kjuulh/fuzzy-clone
+	return path.Join(getHomeOrDefault(config), g.Provider(), g.FullName), nil
 }
 
 var _ Repository = &GitHubRepository{}
@@ -338,11 +344,12 @@ var (
 )
 
 type Config struct {
-	GitHubToken       string
-	GitHubAccessToken string
-	Root              string
-	CacheCooldown     string
-	UseCwd            bool
+	GitHubToken        string
+	GitHubAccessToken  string
+	Root               string
+	CacheCooldown      string
+	UseCwd             bool
+	FlattenDestination bool
 }
 
 func getGitHubToken(cfg *Config) (string, error) {
@@ -377,7 +384,7 @@ func getHomeOrDefault(cfg *Config) string {
 func (g *GitHubProvider) Get(ctx context.Context, cfg *Config) ([]*GitHubRepository, error) {
 	token, err := getGitHubToken(cfg)
 	if token == "" {
-		log.Printf("auth error: %v", err)
+		fmt.Fprintf(os.Stderr, "auth error: %s\n", err)
 		return nil, fmt.Errorf("a token is required for github, follow setup in readme, and remember that the token should have at least repo:read, or consider installing the github-cli (gh) utility")
 	}
 
@@ -386,7 +393,7 @@ func (g *GitHubProvider) Get(ctx context.Context, cfg *Config) ([]*GitHubReposit
 
 	client := github.NewClient(httpClient)
 
-	log.Println("fetching github repos, this may take a bit...")
+	fmt.Fprintln(os.Stderr, "fetching github repos, this may take a bit...")
 	repos, err := getOrgRepos(ctx, client, 0)
 	if err != nil {
 		return nil, err
@@ -421,6 +428,12 @@ func main() {
 				Usage:       "when set, clone repo into CWD",
 				Sources:     cli.EnvVars("FUZZY_CLONE_USE_CWD"),
 				Destination: &cfg.UseCwd,
+			},
+			&cli.BoolFlag{
+				Name:        "flatten-destination",
+				Usage:       "when set, the destination path will no longer be namespaces, and instead just put in the root folder",
+				Sources:     cli.EnvVars("FUZZY_CLONE_FLATTEN_DESTINATION"),
+				Destination: &cfg.FlattenDestination,
 			},
 			&cli.StringFlag{
 				Name:        "github-token",
@@ -493,7 +506,7 @@ func main() {
 			repo := repos[idx]
 
 			// 3. Clone
-			destDir, err := repo.GetOrClone(ctx, "tmp", cfg.UseCwd)
+			destDir, err := repo.GetOrClone(ctx, &cfg)
 			if err != nil {
 				return fmt.Errorf("clone repository: %w", err)
 			}
