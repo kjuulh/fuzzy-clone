@@ -12,10 +12,12 @@ import (
 	"strings"
 	"time"
 
+	"fuzzy-clone/internal/config"
 	"fuzzy-clone/internal/shell"
 
 	"github.com/BurntSushi/toml"
 	"github.com/adrg/xdg"
+	"github.com/golang-cz/devslog"
 	"github.com/google/go-github/v60/github"
 	"github.com/ktr0731/go-fuzzyfinder"
 	altsrc "github.com/urfave/cli-altsrc/v3"
@@ -417,22 +419,49 @@ func (g *GitHubProvider) Get(ctx context.Context, cfg *Config) ([]*GitHubReposit
 	return gitHubRepos, nil
 }
 
-var (
-	configFile = altsrc.StringSourcer(path.Join(os.ExpandEnv("$HOME/.config"), "fz", "config.toml"))
-)
-
 func tomlSource(key string) *altsrc.ValueSource {
-	return altsrc.NewValueSource(toml.Unmarshal, "toml", key, configFile)
+	return altsrc.NewValueSource(toml.Unmarshal, "toml", key, config.ConfigFile)
 }
 
 func main() {
-
 	var cfg Config
 
 	app := &cli.Command{
 		Name:  "fuzzy-clone",
 		Usage: "Fuzzy find and clone repositories",
 		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:  "log-level",
+				Value: "info",
+				Action: func(ctx context.Context, c *cli.Command, s string) error {
+					var level slog.Level
+
+					switch strings.TrimSpace(strings.ToLower(s)) {
+					case "debug":
+						level = slog.LevelDebug
+					case "info":
+						level = slog.LevelInfo
+					case "warn":
+						level = slog.LevelWarn
+					case "error":
+						level = slog.LevelError
+					case "off":
+						slog.SetDefault(slog.New(slog.DiscardHandler))
+						return nil
+					default:
+						return fmt.Errorf("unsupported log level value: %s", s)
+					}
+
+					slog.SetDefault(slog.New(devslog.NewHandler(os.Stderr, &devslog.Options{
+						HandlerOptions: &slog.HandlerOptions{
+							Level: level,
+						},
+					})))
+
+					return nil
+				},
+			},
+
 			&cli.BoolFlag{
 				Name:        "use-cwd",
 				Aliases:     []string{"c"},
@@ -467,11 +496,16 @@ func main() {
 			&cli.StringFlag{
 				Name:        "cache-cooldown",
 				Usage:       "Enable cache cooldown (true/false)",
-				Sources:     cli.NewValueSourceChain(cli.EnvVar("FUZZY_CLONE_CACHE_COOLDOWN"), tomlSource("cache_cooldown")),
+				Sources:     cli.NewValueSourceChain(cli.EnvVar("FUZZY_CLONE_CACHE_COOLDOWN"), tomlSource("cache.cooldown")),
 				Destination: &cfg.CacheCooldown,
 			},
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
+			slog.DebugContext(ctx,
+				"current settings",
+				"cfg", cfg,
+			)
+
 			cache := NewCache()
 
 			repos, exists, err := cache.Get(ctx)
@@ -535,7 +569,7 @@ func main() {
 			&cli.Command{
 				Name: "doctor",
 				Action: func(ctx context.Context, c *cli.Command) error {
-					fmt.Fprintf(c.Writer, "config_file: %s, exists: %s\n", configFile.SourceURI(), configFileExists())
+					fmt.Fprintf(c.Writer, "config_file: %s, exists: %s\n", config.ConfigFile.SourceURI(), configFileExists())
 
 					return nil
 				},
@@ -550,7 +584,7 @@ func main() {
 }
 
 func configFileExists() string {
-	_, err := os.Stat(configFile.SourceURI())
+	_, err := os.Stat(config.ConfigFile.SourceURI())
 	if errors.Is(err, os.ErrNotExist) {
 		return "nope"
 	}

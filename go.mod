@@ -5,6 +5,7 @@ go 1.25
 require (
 	github.com/BurntSushi/toml v1.5.0
 	github.com/adrg/xdg v0.4.0
+	github.com/golang-cz/devslog v0.0.15
 	github.com/google/go-github/v60 v60.0.0
 	github.com/ktr0731/go-fuzzyfinder v0.8.0
 	github.com/urfave/cli-altsrc/v3 v3.1.0
